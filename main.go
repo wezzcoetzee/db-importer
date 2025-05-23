@@ -7,8 +7,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -18,6 +20,25 @@ type AssetPrice struct {
 	Date    time.Time
 	AssetID string
 	Close   float64
+}
+
+func normalizeDate(dateStr string) string {
+	parts := strings.Split(dateStr, "/")
+	if len(parts) != 3 {
+		return dateStr
+	}
+
+	day := parts[0]
+	if len(day) == 1 {
+		day = "0" + day
+	}
+	month := parts[1]
+	if len(month) == 1 {
+		month = "0" + month
+	}
+	year := parts[2]
+
+	return fmt.Sprintf("%s/%s/%s", day, month, year)
 }
 
 func main() {
@@ -34,10 +55,10 @@ func main() {
 
 	createTableQuery := `
 		CREATE TABLE IF NOT EXISTS PriceHistory (
-			Id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+			Id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			Date DATE NOT NULL,
 			AssetId VARCHAR(50) NOT NULL,
-			Price NUMERIC NOT NULL,
+			Price NUMERIC NOT NULL
 		)`
 	_, err = db.Exec(createTableQuery)
 	if err != nil {
@@ -59,7 +80,7 @@ func main() {
 		log.Fatal("Failed to read CSV header:", err)
 	}
 
-	stmt, err := db.Prepare("INSERT INTO PriceHistory (Date, AssetId, Price) VALUES ($1, $2, $3)")
+	stmt, err := db.Prepare("INSERT INTO PriceHistory (Id, Date, AssetId, Price) VALUES ($1, $2, $3, $4)")
 	if err != nil {
 		log.Fatal("Failed to prepare SQL statement:", err)
 	}
@@ -75,9 +96,10 @@ func main() {
 			continue
 		}
 
-		date, err := time.Parse("1/2/06", record[0])
+		normalizedDate := normalizeDate(record[0])
+		date, err := time.ParseInLocation("02/01/2006", normalizedDate, time.UTC)
 		if err != nil {
-			log.Printf("Error parsing date '%s': %v", record[0], err)
+			log.Printf("Error parsing date '%s': %v", normalizedDate, err)
 			continue
 		}
 
@@ -88,12 +110,21 @@ func main() {
 			continue
 		}
 
-		formattedDate := date.Format("02/01/2006")
-		_, err = stmt.Exec(formattedDate, record[1], price)
+		id := uuid.New().String()
+
+		result, err := stmt.Exec(id, date, record[1], price)
 		if err != nil {
-			log.Printf("Error inserting record: %v", err)
+			log.Printf("Error inserting record (Id: %s, Date: %s, AssetId: %s, Price: %.2f): %v", id, date, record[1], price, err)
 			continue
 		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			log.Printf("Error checking rows affected for record (id: %s): %v", id, err)
+			continue
+		}
+
+		log.Printf("Successfully inserted record: Id=%s, Date=%s, AssetId=%s, pPricerice=%.2f, rows_affected=%d", id, date, record[1], price, rowsAffected)
 	}
 
 	fmt.Println("CSV import completed successfully")
