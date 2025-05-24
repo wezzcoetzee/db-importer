@@ -54,11 +54,11 @@ func main() {
 	defer db.Close()
 
 	createTableQuery := `
-		CREATE TABLE IF NOT EXISTS PriceHistory (
-			Id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-			Date DATE NOT NULL,
-			AssetId VARCHAR(50) NOT NULL,
-			Price NUMERIC NOT NULL
+		CREATE TABLE IF NOT EXISTS "PriceHistory" (
+			"Id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			"Date" DATE NOT NULL,
+			"AssetId" VARCHAR(50) NOT NULL,
+			"Price" NUMERIC NOT NULL
 		)`
 	_, err = db.Exec(createTableQuery)
 	if err != nil {
@@ -80,7 +80,7 @@ func main() {
 		log.Fatal("Failed to read CSV header:", err)
 	}
 
-	stmt, err := db.Prepare("INSERT INTO PriceHistory (Id, Date, AssetId, Price) VALUES ($1, $2, $3, $4)")
+	stmt, err := db.Prepare(`INSERT INTO "PriceHistory" ("Id", "Date", "AssetId", "Price") VALUES ($1, $2, $3, $4)`)
 	if err != nil {
 		log.Fatal("Failed to prepare SQL statement:", err)
 	}
